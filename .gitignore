@@ -1,0 +1,13 @@
+node_modules/
+.env.local
+.env.test
+.env.development
+.env.production
+.env
+.DS_Store
+
+.vscode/
+.package-lock.json
+
+*.env.sh
+*.out

@@ -1,0 +1,16 @@
+node_modules
+*.sh
+.gitignore
+*.out
+.dockerignore
+package-lock.json
+.DS_Store
+.next
+*.log
+*.log*
+.env
+.env.test
+.nuxt
+dist/4
+out/
+.next

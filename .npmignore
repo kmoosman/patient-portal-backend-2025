@@ -1,0 +1,14 @@
+# Exclude development-specific files and directories
+node_modules/
+test/
+config/
+*.env
+
+# Exclude source control files and directories
+.git/
+.svn/
+.hg/
+
+# Exclude editor-specific files and directories
+.vscode/
+.idea/
