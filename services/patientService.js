@@ -19,7 +19,10 @@ export const getAllPatientDetailsService = async (id) => {
   }
 };
 
-export const getAllFamilyHistoryForPatientService = async ({ id, accessLevel }) => {
+export const getAllFamilyHistoryForPatientService = async ({
+  id,
+  accessLevel,
+}) => {
   try {
     const query = `SELECT * FROM patient_family_history
     WHERE patient_id = :id
@@ -38,7 +41,10 @@ export const getAllFamilyHistoryForPatientService = async ({ id, accessLevel }) 
   }
 };
 
-export const getAllAppointmentsForPatientService = async ({ id, accessLevel }) => {
+export const getAllAppointmentsForPatientService = async ({
+  id,
+  accessLevel,
+}) => {
   try {
     const query = `SELECT
     patient_appointments.*,
@@ -101,7 +107,10 @@ GROUP BY
   }
 };
 
-export const getAllAppointmentsByDiagnosisService = async ({ id, accessLevel }) => {
+export const getAllAppointmentsByDiagnosisService = async ({
+  id,
+  accessLevel,
+}) => {
   try {
     const query = `SELECT
     patient_appointments.*,
@@ -251,7 +260,10 @@ GROUP BY
   }
 };
 
-export const getAllTimelineEventsForPatientService = async ({ id, accessLevel }) => {
+export const getAllTimelineEventsForPatientService = async ({
+  id,
+  accessLevel,
+}) => {
   try {
     const query = `SELECT
     timeline_events.*,
@@ -283,7 +295,7 @@ GROUP BY
       return deepCamelcaseKeys(timeline);
     }
   } catch (error) {
-    console.log(error)
+    console.log(error);
     throw new Error("Failed to timeline events");
   }
 };
@@ -325,7 +337,10 @@ GROUP BY
   }
 };
 
-export const getAllTissueSamplesForPatientService = async ({ id, accessLevel }) => {
+export const getAllTissueSamplesForPatientService = async ({
+  id,
+  accessLevel,
+}) => {
   try {
     const query = `SELECT tissue_locations.*, json_agg(json_build_object('institution_id', i.id, 'institution_name', i.title)) AS institutions, json_agg(json_build_object('id', d.id, 'title', d.title, 'color', d.color)) AS diagnosis  from tissue_locations
     INNER JOIN institutions i on tissue_locations.institution_id = i.id
@@ -348,8 +363,9 @@ export const getAllTissueSamplesForPatientService = async ({ id, accessLevel }) 
 
 export const getAllAttachmentsByCategoryForPatientService = async ({
   id,
-  category, accessLevel }
-) => {
+  category,
+  accessLevel,
+}) => {
   try {
     const query = `SELECT * FROM attachments
     WHERE patient_id = :id
@@ -357,7 +373,11 @@ export const getAllAttachmentsByCategoryForPatientService = async ({
     AND attachments.access_level_id >= :accessLevel
     `;
     const results = await sequelize.query(query, {
-      replacements: { id: id, category_type: category, accessLevel: accessLevel },
+      replacements: {
+        id: id,
+        category_type: category,
+        accessLevel: accessLevel,
+      },
       type: sequelize.QueryTypes.SELECT,
     });
     const documents = results;
@@ -370,9 +390,7 @@ export const getAllAttachmentsByCategoryForPatientService = async ({
   }
 };
 
-
 export const updatePatientDetailsService = async ({ id, patient }) => {
-
   const replacements = {
     id: id,
     address1: patient.address_1,
@@ -428,9 +446,9 @@ export const updatePatientDetailsService = async ({ id, patient }) => {
     console.log(error);
     throw new Error("Failed to update patient details");
   }
-}
+};
 
-// create timeline event 
+// create timeline event
 export const createTimelineEventService = async ({ id, timelineEvent }) => {
   const timelineEventId = uuidv4();
   const replacements = {
@@ -461,7 +479,7 @@ export const createTimelineEventService = async ({ id, timelineEvent }) => {
   }
 };
 
-//create timeline event link 
+//create timeline event link
 export const createTimelineEventLinkService = async ({ id, link }) => {
   const timelineEventLinkId = uuidv4();
   const replacements = {
@@ -487,5 +505,65 @@ export const createTimelineEventLinkService = async ({ id, link }) => {
   } catch (error) {
     console.log(error);
     throw new Error("Failed to create timeline event link");
+  }
+};
+
+// Create appointment
+export const createAppointmentService = async ({ id, appointment }) => {
+  const appointmentId = uuidv4();
+  const replacements = {
+    id: appointmentId,
+    patientId: id,
+    title: appointment.title,
+    category: appointment.category,
+    reason: appointment.reason,
+    providerId: appointment.providerId,
+    institutionId: appointment.institutionId,
+    notes: appointment.notes,
+    startDate: appointment.startDate,
+    time: appointment.time,
+    endDate: appointment.endDate,
+    accessLevel: appointment.accessLevel ?? 1,
+  };
+  try {
+    const query = `INSERT INTO patient_appointments (id, patient_id, title, category, reason, provider_id, institution_id, notes, start_date, time, end_date, access_level_id) VALUES (:id, :patientId, :title, :category, :reason, :providerId, :institutionId, :notes, :startDate, :time, :endDate, :accessLevel) RETURNING *`;
+    const results = await sequelize.query(query, {
+      replacements: replacements,
+      type: sequelize.QueryTypes.INSERT,
+    });
+    const appointment = results[0][0];
+    if (appointment) {
+      return deepCamelcaseKeys(appointment);
+    }
+  } catch (error) {
+    console.log(error);
+    throw new Error("Failed to create appointment");
+  }
+};
+
+//update appointment
+export const updateAppointmentService = async ({ id, appointment }) => {
+  console.log(appointment);
+  const replacements = {
+    id: id,
+    title: appointment.title ?? null,
+    category: appointment.category ?? null,
+    reason: appointment.reason ?? null,
+    providerId: appointment.providerId ?? null,
+    institutionId: appointment.institutionId ?? null,
+    notes: appointment.notes ?? null,
+    startDate: appointment.startDate ?? null,
+    time: appointment.time ?? null,
+    endDate: appointment.endDate ?? null,
+  };
+  try {
+    const query = `UPDATE patient_appointments SET title = :title, category = :category, reason = :reason, provider_id = :providerId, institution_id = :institutionId, notes = :notes, start_date = :startDate, time = :time, end_date = :endDate WHERE id = :id RETURNING *`;
+    const results = await sequelize.query(query, {
+      replacements: replacements,
+      type: sequelize.QueryTypes.UPDATE,
+    });
+  } catch (error) {
+    console.log(error);
+    throw new Error("Failed to update appointment");
   }
 };
