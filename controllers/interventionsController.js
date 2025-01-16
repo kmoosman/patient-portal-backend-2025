@@ -8,12 +8,16 @@ import {
   createInterventionProviderService,
   removeInterventionProviderService,
   getInterventionProvidersService,
-  updateInterventionService
+  updateInterventionService,
 } from "../services/interventionsService.js";
 import clerkClient from "@clerk/clerk-sdk-node";
 import { isUserAdminService } from "../services/userService.js";
-import { getProviderByProviderIdService, getProviderByIdBasicService } from "../services/providerService.js";
-import { getAttachmentByIdService } from "../services/attachmentService.js";
+import {
+  getProviderByProviderIdService,
+  getProviderByIdBasicService,
+} from "../services/providerService.js";
+import { getPresignedUrlService } from "../services/attachmentService.js";
+import { processAttachmentLink } from "../helpers/utils.js";
 
 export const getAllInterventionsByPatient = async (req, res) => {
   const lastLogin = req.query.lastLogin;
@@ -22,9 +26,9 @@ export const getAllInterventionsByPatient = async (req, res) => {
     const patientId = req.patientId;
     const interventions = await getAllInterventionsByPatientService({
       id: patientId,
-      lastLogin, accessLevel
-    }
-    );
+      lastLogin,
+      accessLevel,
+    });
 
     if (interventions) {
       res.json(interventions);
@@ -43,9 +47,7 @@ export const getInterventionById = async (req, res) => {
     const interventions = await getInterventionByIdService({ id, accessLevel });
 
     if (interventions) {
-
       res.json(interventions);
-
     } else {
       res.status(404).json({ error: "Interventions not found." });
     }
@@ -58,7 +60,10 @@ export const getAllInterventionsByDiagnosis = async (req, res) => {
   const id = req.params.id;
   try {
     const accessLevel = req.accessLevel;
-    const interventions = await getAllInterventionsByDiagnosisService({ id, accessLevel });
+    const interventions = await getAllInterventionsByDiagnosisService({
+      id,
+      accessLevel,
+    });
     if (interventions) {
       res.json(interventions);
     } else {
@@ -73,17 +78,29 @@ export const getAllAttachmentsForInterventionById = async (req, res) => {
   try {
     const id = req.params.id;
     const accessLevel = req.accessLevel;
-    const attachments = await getAllAttachmentsForInterventionByIdService({ id, accessLevel });
+    const attachments = await getAllAttachmentsForInterventionByIdService({
+      id,
+      accessLevel,
+    });
+
     if (attachments) {
-      res.json(attachments);
+      const attachmentsWithUrls = await Promise.all(
+        attachments.map(async (attachment) => ({
+          ...attachment,
+          link: attachment.link
+            ? await processAttachmentLink(attachment.link)
+            : null,
+        }))
+      );
+      res.json(attachmentsWithUrls);
     } else {
       res.status(404).json({ error: "Attachments not found." });
     }
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Failed to fetch attachments." });
   }
 };
-
 
 export const createIntervention = async (req, res) => {
   const patientId = req.patientId;
@@ -95,13 +112,14 @@ export const createIntervention = async (req, res) => {
     const isAdmin = await isUserAdminService(userEmail);
 
     if (!isAdmin) {
-      return res
-        .status(403)
-        .json({ error: "You do not have permission to add an intervention for this user" });
+      return res.status(403).json({
+        error:
+          "You do not have permission to add an intervention for this user",
+      });
     }
 
     const intervention = req.body.data.data;
-    //todo: refactor this 
+    //todo: refactor this
     const patientIntervention = {
       patientId: patientId,
       interventionId: intervention?.id ?? null,
@@ -119,35 +137,40 @@ export const createIntervention = async (req, res) => {
       reason: intervention.reason || null,
       diagnosisId: intervention.diagnosis.id || null,
       metadata: {
-        organs: intervention.organs || []
-      }
+        organs: intervention.organs || [],
+      },
     };
 
-    const createdIntervention = await createInterventionService(patientIntervention);
+    const createdIntervention = await createInterventionService(
+      patientIntervention
+    );
 
     //link any listed providers to the intervention
     patientIntervention.providers.map(async (provider) => {
-      const existingProvider = await getProviderByProviderIdService({ providerId: provider.id, patientId, accessLevel });
+      const existingProvider = await getProviderByProviderIdService({
+        providerId: provider.id,
+        patientId,
+        accessLevel,
+      });
       if (existingProvider.length > 0) {
-        createInterventionProviderService({ providerId: existingProvider[0].providerId, interventionId: createdIntervention[0].id, patientId: patientId });
+        createInterventionProviderService({
+          providerId: existingProvider[0].providerId,
+          interventionId: createdIntervention[0].id,
+          patientId: patientId,
+        });
       }
     });
-
-
 
     if (createdIntervention) {
       res.json(intervention.id);
     } else {
       res.status(404).json({ error: "Unable to create intervention" });
     }
-
   } catch (err) {
-    console.log(err)
+    console.log(err);
     res.status(500).json({ error: "Failed to create intervention." });
   }
-}
-
-
+};
 
 //update intervention links
 export const updateInterventionLinks = async (intervention, accessLevel) => {
@@ -155,41 +178,67 @@ export const updateInterventionLinks = async (intervention, accessLevel) => {
   let removedLinks = 0;
   let createdLinks = 0;
 
-
   try {
     const patientIntervention = {
       patientId: intervention.patientId,
       interventionId: intervention.id,
       providers: intervention.providers || [],
-      attachments: intervention.attachments || []
+      attachments: intervention.attachments || [],
     };
 
-    const existingInterventionProviders = await getInterventionProvidersService({ interventionId: patientIntervention.interventionId, patientId: patientId });
+    const existingInterventionProviders = await getInterventionProvidersService(
+      {
+        interventionId: patientIntervention.interventionId,
+        patientId: patientId,
+      }
+    );
     //link any listed providers to the intervention
     patientIntervention.providers.map(async (provider) => {
-      const existingProvider = await getProviderByIdBasicService({ providerId: provider.id, patientId });
+      const existingProvider = await getProviderByIdBasicService({
+        providerId: provider.id,
+        patientId,
+      });
       // ensure that providers isn't already by getting a link of existing providers for the intervention
-      const providerIsInList = existingInterventionProviders.some((interventionProvider) => interventionProvider.id === provider.id);
+      const providerIsInList = existingInterventionProviders.some(
+        (interventionProvider) => interventionProvider.id === provider.id
+      );
       if (existingProvider.length > 0 && !providerIsInList) {
-        createInterventionProviderService({ providerId: provider.id, interventionId: patientIntervention.interventionId, patientId: patientId });
+        createInterventionProviderService({
+          providerId: provider.id,
+          interventionId: patientIntervention.interventionId,
+          patientId: patientId,
+        });
         createdLinks++;
       }
     });
 
     //find all of the providers in the existing list that are not in the new list and remove them
-    const providersToRemove = existingInterventionProviders.filter((interventionProvider) => !patientIntervention.providers.some((provider) => provider.id === interventionProvider.id));
+    const providersToRemove = existingInterventionProviders.filter(
+      (interventionProvider) =>
+        !patientIntervention.providers.some(
+          (provider) => provider.id === interventionProvider.id
+        )
+    );
     if (providersToRemove.length > 0) {
       providersToRemove.map(async (provider) => {
-        removeInterventionProviderService({ providerId: provider.id, interventionId: patientIntervention.interventionId, patientId });
+        removeInterventionProviderService({
+          providerId: provider.id,
+          interventionId: patientIntervention.interventionId,
+          patientId,
+        });
         removedLinks++;
       });
     }
 
     //get a list of all attachments for the intervention
-    const existingAttachments = await getAllAttachmentsForInterventionByIdService({ id: patientIntervention.interventionId, accessLevel: 5 });
+    const existingAttachments =
+      await getAllAttachmentsForInterventionByIdService({
+        id: patientIntervention.interventionId,
+        accessLevel: 5,
+      });
     //link any listed attachments to the intervention
     // patientIntervention.attachments.map(async (attachment) => {
-    //   const existingAttachment = await getAttachmentByIdService({ attachmentId: attachment.id });
+    //   const existingAttachment = await getAttachmentService({ attachmentId: attachment.id });
     //   // ensure that attachments isn't already linked by getting a link of existing attachments for the intervention
     //   const attachmentIsInList = existingAttachments.some((interventionAttachment) => interventionAttachment.id === attachment.id);
     //   if (!existingAttachment.length > 0 && !attachmentIsInList) {
@@ -199,7 +248,12 @@ export const updateInterventionLinks = async (intervention, accessLevel) => {
     // });
 
     //find all of the attachments in the existing list that are not in the new list and remove them
-    const attachmentsToRemove = existingAttachments.filter((interventionAttachment) => !patientIntervention.attachments.some((attachment) => attachment.id === interventionAttachment.id));
+    const attachmentsToRemove = existingAttachments.filter(
+      (interventionAttachment) =>
+        !patientIntervention.attachments.some(
+          (attachment) => attachment.id === interventionAttachment.id
+        )
+    );
     // if (attachmentsToRemove.length > 0) {
     //   attachmentsToRemove.map(async (attachment) => {
     //     removeAttachmentFromInterventionService({ attachmentId: attachment.id, interventionId: patientIntervention.interventionId, patientId });
@@ -207,15 +261,14 @@ export const updateInterventionLinks = async (intervention, accessLevel) => {
     //   });
     // }
     return { createdLinks, removedLinks };
-  }
-  catch (err) {
-    console.log(err)
-    //throw error 
+  } catch (err) {
+    console.log(err);
+    //throw error
     throw new Error("Failed to update intervention links" + err);
   }
-}
+};
 
-//edit intervention 
+//edit intervention
 export const editIntervention = async (req, res) => {
   const patientId = req.patientId;
   try {
@@ -226,9 +279,10 @@ export const editIntervention = async (req, res) => {
     const isAdmin = await isUserAdminService(userEmail);
 
     if (!isAdmin) {
-      return res
-        .status(403)
-        .json({ error: "You do not have permission to edit an intervention for this user" });
+      return res.status(403).json({
+        error:
+          "You do not have permission to edit an intervention for this user",
+      });
     }
 
     const intervention = req.body.data.data;
@@ -250,27 +304,30 @@ export const editIntervention = async (req, res) => {
       reason: intervention.reason || null,
       diagnosisId: intervention.diagnosisId || null,
       metadata: {
-        organs: intervention.organs || []
-      }
+        organs: intervention.organs || [],
+      },
     };
 
-    const updatedInterventionDetails = await updateInterventionService(patientIntervention);
+    const updatedInterventionDetails = await updateInterventionService(
+      patientIntervention
+    );
 
     if (updatedInterventionDetails) {
-
       //update the links for the intervention
-      const updatedLinks = await updateInterventionLinks(patientIntervention, accessLevel);
+      const updatedLinks = await updateInterventionLinks(
+        patientIntervention,
+        accessLevel
+      );
       res.json({
         createdLinks: updatedLinks.createdLinks,
         removedLinks: updatedLinks.removedLinks,
-        intervention: intervention.id
+        intervention: intervention.id,
       });
     } else {
       res.status(404).json({ error: "Unable to update intervention" });
     }
-
   } catch (err) {
-    console.log(err)
+    console.log(err);
     res.status(500).json({ error: "Failed to update intervention." });
   }
-}
+};

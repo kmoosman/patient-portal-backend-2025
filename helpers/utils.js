@@ -1,3 +1,5 @@
+import { getPresignedUrlService } from "../services/attachmentService.js";
+
 export function deepCamelcaseKeys(obj) {
   if (Array.isArray(obj)) {
     return obj.map((item) => deepCamelcaseKeys(item));
@@ -24,6 +26,37 @@ export function deepCamelcaseKeys(obj) {
     return obj;
   }
 }
+
+export const processAttachmentLink = async (link) => {
+  if (!link) return link;
+
+  try {
+    const url = new URL(link);
+    const hostname = url.hostname;
+
+    // Check if URL starts with "patient" after protocol
+    if (hostname.startsWith("patient")) {
+      const pathParts = url.pathname.split("/");
+      const filename = pathParts.pop();
+
+      // Check if the filename includes the extension
+      const key = filename.includes(".")
+        ? `attachments/${filename}`
+        : `attachments/${filename}.pdf`; // Default to .pdf if no extension
+
+      return await getPresignedUrlService(key);
+    }
+
+    // If not a patient URL, return the original link
+    return link;
+  } catch (error) {
+    console.error("Error processing attachment:", {
+      originalLink: link,
+      error: error.message,
+    });
+    return link;
+  }
+};
 
 export const toNumberOrNull = (value) => {
   const number = parseFloat(value);
