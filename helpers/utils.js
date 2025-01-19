@@ -34,7 +34,7 @@ export const processAttachmentLink = async (link) => {
     const url = new URL(link);
     const hostname = url.hostname;
 
-    // Check if URL hostname contains "patient" or "patient-portal"
+    // Check if URL hostname contains "patient"
     if (hostname.includes("patient")) {
       const pathParts = url.pathname.split("/");
       const filename = pathParts.pop();
