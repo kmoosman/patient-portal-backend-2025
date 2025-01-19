@@ -196,7 +196,7 @@ export const getPresignedUrlService = async (key) => {
   }
 };
 
-// Modify your existing attachment fetch service to include presigned URLs
+// Modify existing attachment fetch service to include presigned URLs
 export const getAttachmentService = async (id) => {
   try {
     const query = `SELECT * FROM attachments WHERE id = :id`;
@@ -208,8 +208,6 @@ export const getAttachmentService = async (id) => {
     if (attachment && attachment.link) {
       // Generate presigned URL for the attachment
       attachment.presigned_url = await getPresignedUrlService(attachment.link);
-      // You might want to delete or hide the original link
-      delete attachment.link;
     }
 
     return deepCamelcaseKeys(attachment);
