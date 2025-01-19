@@ -36,6 +36,7 @@ export const processAttachmentLink = async (link) => {
 
     // Check if URL hostname contains "patient"
     if (hostname.includes("patient")) {
+      console.log("Patient URL detected");
       const pathParts = url.pathname.split("/");
       const filename = pathParts.pop();
 
@@ -45,6 +46,8 @@ export const processAttachmentLink = async (link) => {
         : `attachments/${filename}.pdf`; // Default to .pdf if no extension
 
       return await getPresignedUrlService(key);
+    } else {
+      console.log("Not a patient URL");
     }
 
     // If not a patient URL, return the original link

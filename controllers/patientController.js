@@ -288,7 +288,6 @@ export const createAppointment = async (req, res) => {
 export const updateAppointment = async (req, res) => {
   const appointmentId = req.params.id;
   const appointment = req.body.data.data;
-  console.log(req.body.data;
   try {
     const event = await updateAppointmentService({
       id: appointmentId,
