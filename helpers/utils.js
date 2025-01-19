@@ -28,6 +28,7 @@ export function deepCamelcaseKeys(obj) {
 }
 
 export const processAttachmentLink = async (link) => {
+  console.log("Processing attachment link:", link);
   if (!link) return link;
 
   try {
